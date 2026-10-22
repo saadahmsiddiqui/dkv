@@ -62,17 +62,17 @@ mod tests {
     #[test]
     fn exists_checks_key_presence() {
         let mut cache = Cache::new();
-        assert_eq!(cache.exists("name"), false);
+        assert!(!cache.exists("name"));
         cache.set("name".to_string(), "dkv".to_string());
-        assert_eq!(cache.exists("name"), true);
+        assert!(cache.exists("name"));
     }
 
     #[test]
     fn delete_removes_a_key() {
         let mut cache = Cache::new();
         cache.set("name".to_string(), "dkv".to_string());
-        assert_eq!(cache.exists("name"), true);
+        assert!(cache.exists("name"));
         cache.delete("name");
-        assert_eq!(cache.exists("name"), false);
+        assert!(!cache.exists("name"));
     }
 }
