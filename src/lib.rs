@@ -26,6 +26,18 @@ impl Cache {
     pub fn delete(&mut self, key: &str) -> bool {
         self.store.remove(key).is_some()
     }
+
+    pub fn len(&self) -> usize {
+        self.store.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.store.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.store.clear()
+    }
 }
 
 impl Default for Cache {
@@ -74,5 +86,39 @@ mod tests {
         assert!(cache.exists("name"));
         cache.delete("name");
         assert!(!cache.exists("name"));
+    }
+
+    #[test]
+    fn new_cache_is_empty() {
+        let cache = Cache::default();
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn default_creates_an_empty_cache() {
+        let cache = Cache::default();
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn len_tracks_unique_keys() {
+        let mut cache = Cache::default();
+        cache.set("1", "1");
+        cache.set("2", "2");
+        assert_eq!(cache.len(), 2);
+        // Replacing does not increase key count
+        cache.set("1", "2");
+        assert_eq!(cache.len(), 2);
+    }
+
+    #[test]
+    fn clear_removes_all_keys() {
+        let mut cache = Cache::default();
+        cache.set("1", "1");
+        cache.set("2", "2");
+        assert_eq!(cache.len(), 2);
+        cache.clear();
+        assert_eq!(cache.len(), 0);
+        assert!(cache.is_empty());
     }
 }
