@@ -1,27 +1,46 @@
-use super::Cache;
 use std::sync::Arc;
+
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 
-#[tokio::main]
+use crate::Cache;
+
 pub async fn run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(address).await?;
+    println!("RustCache listening on {}", listener.local_addr()?);
 
-    println!("Server running on {address}");
+    serve(listener, std::future::pending()).await
+}
+
+pub async fn serve<F>(listener: TcpListener, shutdown: F) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: std::future::Future<Output = ()> + Send,
+{
     let cache = Arc::new(Mutex::new(Cache::new()));
+    tokio::pin!(shutdown);
 
     loop {
-        let (stream, address) = listener.accept().await?;
-        println!("Client connected: {address}");
-
-        let cache = Arc::clone(&cache);
-        tokio::spawn(async move {
-            if let Err(error) = handle_connection(stream, cache).await {
-                eprintln!("Error handling client {address}: {error}");
+        tokio::select! {
+            _ = &mut shutdown => {
+                println!("Dkv shutting down");
+                break;
             }
-        });
+
+            accepted = listener.accept() => {
+                let (stream, _address) = accepted?;
+                let cache = Arc::clone(&cache);
+
+                tokio::spawn(async move {
+                    if let Err(error) = handle_connection(stream, cache).await {
+                        eprintln!("Client error: {error}");
+                    }
+                });
+            }
+        }
     }
+
+    Ok(())
 }
 
 async fn handle_connection(
