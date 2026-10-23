@@ -14,7 +14,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (stream, address) = listener.accept().await?;
         println!("Client connected: {address}");
 
-        handle_connection(stream, Arc::clone(&cache)).await?;
+        let cache = Arc::clone(&cache);
+        tokio::spawn(async move {
+            if let Err(error) = handle_connection(stream, cache).await {
+                eprintln!("Error handling client {address}: {error}");
+            }
+        });
     }
 }
 
