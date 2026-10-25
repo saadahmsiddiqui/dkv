@@ -1,43 +1,90 @@
 pub mod server;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
+struct Entry {
+    value: String,
+    expires_at: Option<Instant>,
+}
+
+impl Entry {
+    fn new(value: String) -> Self {
+        Self {
+            value,
+            expires_at: None,
+        }
+    }
+
+    fn with_ttl(value: String, ttl: Duration) -> Self {
+        Self {
+            value,
+            expires_at: Some(Instant::now() + ttl),
+        }
+    }
+
+    fn is_expired(&self) -> bool {
+        self.expires_at
+            .is_some_and(|deadline| Instant::now() >= deadline)
+    }
+}
 
 pub struct Cache {
-    store: HashMap<String, String>,
+    entries: HashMap<String, Entry>,
 }
 
 impl Cache {
     pub fn new() -> Self {
         Self {
-            store: HashMap::new(),
+            entries: HashMap::new(),
         }
     }
 
     pub fn set(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.store.insert(key.into(), value.into());
+        self.entries.insert(key.into(), Entry::new(value.into()));
+    }
+
+    pub fn set_with_ttl(
+        &mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+        ttl: Duration,
+    ) {
+        self.entries
+            .insert(key.into(), Entry::with_ttl(value.into(), ttl));
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
-        self.store.get(key).map(|value| value.as_str())
+        self.entries.get(key).and_then(|entry| {
+            if entry.is_expired() {
+                None
+            } else {
+                Some(entry.value.as_str())
+            }
+        })
     }
 
     pub fn exists(&self, key: &str) -> bool {
-        self.store.contains_key(key)
+        self.get(key).is_some()
     }
 
     pub fn delete(&mut self, key: &str) -> bool {
-        self.store.remove(key).is_some()
+        self.entries.remove(key).is_some()
     }
 
     pub fn len(&self) -> usize {
-        self.store.len()
+        self.entries.values().filter(|e| !e.is_expired()).count()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.store.is_empty()
+        self.len() == 0
     }
 
     pub fn clear(&mut self) {
-        self.store.clear()
+        self.entries.clear()
+    }
+
+    pub fn purge_expired(&mut self) {
+        self.entries.retain(|_, e| !e.is_expired());
     }
 }
 
@@ -121,5 +168,12 @@ mod tests {
         cache.clear();
         assert_eq!(cache.len(), 0);
         assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn sets_a_value_with_ttl() {
+        let mut cache = Cache::default();
+        cache.set_with_ttl("name", "dkv", Duration::from_secs(1));
+        assert_eq!(cache.len(), 1);
     }
 }
