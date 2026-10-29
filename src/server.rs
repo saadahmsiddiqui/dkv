@@ -66,10 +66,21 @@ async fn handle_connection(
             ["PING"] => "PONG".to_string(),
 
             ["SET", key, value] => {
-                let mut cache = cache.lock().await;
-                cache.set(*key, *value);
+                cache.lock().await.set(*key, *value);
                 "OK".to_string()
             }
+
+            ["SET", key, value, ttl] => match ttl.parse::<u64>() {
+                Ok(seconds) => {
+                    cache.lock().await.set_with_ttl(
+                        *key,
+                        *value,
+                        std::time::Duration::from_secs(seconds),
+                    );
+                    "OK".to_string()
+                }
+                Err(_) => "ERROR invalid TTL".to_string(),
+            },
 
             ["GET", key] => {
                 let cache = cache.lock().await;

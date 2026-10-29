@@ -29,38 +29,39 @@ async fn server_integration_test() {
     let mut response = String::new();
 
     writer.write_all(b"PING\n").await.expect("send PING");
-
     reader
         .read_line(&mut response)
         .await
         .expect("read PING response");
-
     assert_eq!(response.trim(), "PONG");
-
     response.clear();
 
     writer.write_all(b"SET name dkv\n").await.expect("send SET");
-
     reader
         .read_line(&mut response)
         .await
         .expect("read SET response");
-
     assert_eq!(response.trim(), "OK");
-
     response.clear();
 
     writer.write_all(b"GET name\n").await.expect("send GET");
-
     reader
         .read_line(&mut response)
         .await
         .expect("read GET response");
 
     assert_eq!(response.trim(), "VALUE dkv");
+    response.clear();
 
+    writer.write_all(b"SET ttl dkv 500\n").await.expect("send SET TTL");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("read SET response");
+    assert_eq!(response.trim(), "OK");
+    response.clear();
+ 
     drop(writer);
     let _ = shutdown_tx.send(());
-
     server.await.expect("server task should finish");
 }
