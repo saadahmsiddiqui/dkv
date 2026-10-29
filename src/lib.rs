@@ -63,6 +63,25 @@ impl Cache {
         })
     }
 
+    pub fn ttl(&self, key: &str) -> i64 {
+        let Some(entry) = self.entries.get(key) else {
+            return -2;
+        };
+
+        if entry.is_expired() {
+            return -2;
+        }
+
+        match entry.expires_at {
+            None => -1,
+            Some(deadline) => {
+                let seconds = deadline.saturating_duration_since(Instant::now()).as_secs();
+
+                i64::try_from(seconds).unwrap_or(i64::MAX)
+            }
+        }
+    }
+
     pub fn exists(&self, key: &str) -> bool {
         self.get(key).is_some()
     }
