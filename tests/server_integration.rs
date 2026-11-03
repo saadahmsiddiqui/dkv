@@ -132,3 +132,69 @@ async fn server_handles_concurrent_clients_correctly() {
     let _ = shutdown_tx.send(());
     server.await.expect("server task should finish");
 }
+
+#[tokio::test]
+async fn concurrent_clients_can_write_to_the_same_key() {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpStream;
+    use tokio::sync::oneshot;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap();
+
+    let address = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+    let server = tokio::spawn(async move {
+        dkv::server::serve(listener, async {
+            let _ = shutdown_rx.await;
+        })
+        .await
+        .unwrap();
+    });
+
+    let mut clients = Vec::new();
+
+    for i in 0..20 {
+        let address = address.to_string();
+        clients.push(tokio::spawn(async move {
+            let stream = TcpStream::connect(address).await.unwrap();
+            let (read_half, mut write_half) = stream.into_split();
+            let mut reader = BufReader::new(read_half);
+
+            let command = format!("SET shared value{}\n", i);
+            write_half.write_all(command.as_bytes()).await.unwrap();
+
+            let mut response = String::new();
+            reader.read_line(&mut response).await.unwrap();
+
+            assert_eq!(response.trim(), "OK");
+        }));
+    }
+
+    for client in clients {
+        client.await.unwrap();
+    }
+
+    // All writes have completed. The final value can be from any client.
+    let stream = TcpStream::connect(address).await.unwrap();
+    let (read_half, mut write_half) = stream.into_split();
+    let mut reader = BufReader::new(read_half);
+
+    write_half.write_all(b"GET shared\n").await.unwrap();
+
+    let mut response = String::new();
+    reader.read_line(&mut response).await.unwrap();
+
+    let value = response.trim().strip_prefix("VALUE ").unwrap();
+
+    assert!(
+        (0..20).any(|i| value == format!("value{}", i)),
+        "Unexpected final value: {value}"
+    );
+
+    let _ = shutdown_tx.send(());
+    server.await.unwrap();
+}
