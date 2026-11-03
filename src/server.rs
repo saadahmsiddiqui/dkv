@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::Cache;
 
@@ -17,7 +17,7 @@ pub async fn serve<F>(listener: TcpListener, shutdown: F) -> Result<(), Box<dyn 
 where
     F: std::future::Future<Output = ()> + Send,
 {
-    let cache = Arc::new(Mutex::new(Cache::new()));
+    let cache = Arc::new(RwLock::new(Cache::new()));
     tokio::pin!(shutdown);
 
     loop {
@@ -45,7 +45,7 @@ where
 
 async fn handle_connection(
     stream: TcpStream,
-    cache: Arc<Mutex<Cache>>,
+    cache: Arc<RwLock<Cache>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -66,13 +66,13 @@ async fn handle_connection(
             ["PING"] => "PONG".to_string(),
 
             ["SET", key, value] => {
-                cache.lock().await.set(*key, *value);
+                cache.write().await.set(*key, *value);
                 "OK".to_string()
             }
 
             ["SET", key, value, ttl] => match ttl.parse::<u64>() {
                 Ok(seconds) => {
-                    cache.lock().await.set_with_ttl(
+                    cache.write().await.set_with_ttl(
                         *key,
                         *value,
                         std::time::Duration::from_secs(seconds),
@@ -83,7 +83,7 @@ async fn handle_connection(
             },
 
             ["GET", key] => {
-                let cache = cache.lock().await;
+                let cache = cache.read().await;
                 match cache.get(key) {
                     Some(value) => format!("VALUE {value}"),
                     None => "NOT_FOUND".to_string(),
@@ -91,7 +91,7 @@ async fn handle_connection(
             }
 
             ["DELETE", key] => {
-                let mut cache = cache.lock().await;
+                let mut cache = cache.write().await;
                 if cache.delete(key) {
                     "OK".to_string()
                 } else {
@@ -100,7 +100,7 @@ async fn handle_connection(
             }
 
             ["EXISTS", key] => {
-                let cache = cache.lock().await;
+                let cache = cache.write().await;
                 cache.exists(key).to_string()
             }
 
