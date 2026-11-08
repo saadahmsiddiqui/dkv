@@ -110,7 +110,7 @@ async fn server_handles_concurrent_clients_correctly() {
     let mut clients = Vec::new();
 
     for i in 0..20 {
-        let client_address = address.clone();
+        let client_address = address;
 
         clients.push(tokio::spawn(async move {
             let stream = TcpStream::connect(client_address)
