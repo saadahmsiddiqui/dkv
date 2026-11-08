@@ -75,7 +75,7 @@ async fn handle_connection(
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut request = String::new();
-    let p = persistence.as_ref().clone();
+    let p = persistence.as_ref();
 
     loop {
         request.clear();
