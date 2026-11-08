@@ -5,34 +5,58 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
 
 use crate::Cache;
+use crate::persistence;
 
 pub async fn run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(address).await?;
+    let persistence = Arc::new(persistence::Persistence::new("dkv.log"));
+    let cache = persistence.load_cache()?;
+    let cache = Arc::new(RwLock::new(cache));
+
     println!("RustCache listening on {}", listener.local_addr()?);
 
-    serve(listener, std::future::pending()).await
+    serve(listener, cache, std::future::pending(), Some(persistence)).await
 }
 
-pub async fn serve<F>(listener: TcpListener, shutdown: F) -> Result<(), Box<dyn std::error::Error>>
+pub async fn serve<F>(
+    listener: TcpListener,
+    cache: Arc<RwLock<Cache>>,
+    shutdown: F,
+    persistence: Option<Arc<persistence::Persistence>>,
+) -> Result<(), Box<dyn std::error::Error>>
 where
     F: std::future::Future<Output = ()> + Send,
 {
-    let cache = Arc::new(RwLock::new(Cache::new()));
+    serve_inner(listener, shutdown, cache, persistence).await
+}
+
+async fn serve_inner<F>(
+    listener: TcpListener,
+    shutdown: F,
+    cache: Arc<RwLock<Cache>>,
+    persistence: Option<Arc<persistence::Persistence>>,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: std::future::Future<Output = ()> + Send,
+{
     tokio::pin!(shutdown);
 
     loop {
         tokio::select! {
             _ = &mut shutdown => {
-                println!("Dkv shutting down");
+                println!("RustCache shutting down");
                 break;
             }
 
             accepted = listener.accept() => {
-                let (stream, _address) = accepted?;
+                let (stream, _) = accepted?;
                 let cache = Arc::clone(&cache);
+                let persistence = persistence.clone();
 
                 tokio::spawn(async move {
-                    if let Err(error) = handle_connection(stream, cache).await {
+                    if let Err(error) =
+                        handle_connection(stream, cache, persistence).await
+                    {
                         eprintln!("Client error: {error}");
                     }
                 });
@@ -46,10 +70,12 @@ where
 async fn handle_connection(
     stream: TcpStream,
     cache: Arc<RwLock<Cache>>,
+    persistence: Option<Arc<persistence::Persistence>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut request = String::new();
+    let p = persistence.as_ref().clone();
 
     loop {
         request.clear();
@@ -66,12 +92,14 @@ async fn handle_connection(
             ["PING"] => "PONG".to_string(),
 
             ["SET", key, value] => {
+                let _ = p.unwrap().append_set(key, value);
                 cache.write().await.set(*key, *value);
                 "OK".to_string()
             }
 
             ["SET", key, value, ttl] => match ttl.parse::<u64>() {
                 Ok(seconds) => {
+                    let _ = p.unwrap().append_set(key, value);
                     cache.write().await.set_with_ttl(
                         *key,
                         *value,
@@ -91,6 +119,7 @@ async fn handle_connection(
             }
 
             ["DELETE", key] => {
+                let _ = p.unwrap().append_delete(key);
                 let mut cache = cache.write().await;
                 if cache.delete(key) {
                     "OK".to_string()
@@ -100,7 +129,7 @@ async fn handle_connection(
             }
 
             ["EXISTS", key] => {
-                let cache = cache.write().await;
+                let cache = cache.read().await;
                 cache.exists(key).to_string()
             }
 

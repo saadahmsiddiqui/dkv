@@ -1,10 +1,7 @@
-
 use std::hint::black_box;
 use std::sync::Arc;
 
-use criterion::{
-    criterion_group, criterion_main, BenchmarkId, Criterion,
-};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use dkv::Cache;
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, RwLock};
@@ -71,11 +68,7 @@ fn benchmark_locks(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("lock_comparison");
 
-    for (name, read_percent) in [
-        ("read_heavy", 90),
-        ("balanced", 50),
-        ("write_heavy", 10),
-    ] {
+    for (name, read_percent) in [("read_heavy", 90), ("balanced", 50), ("write_heavy", 10)] {
         group.bench_with_input(
             BenchmarkId::new("Mutex", name),
             &read_percent,

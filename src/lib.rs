@@ -1,5 +1,7 @@
+pub mod persistence;
 pub mod server;
 use std::collections::HashMap;
+use std::io;
 use std::time::{Duration, Instant};
 
 struct Entry {
@@ -33,6 +35,10 @@ pub struct Cache {
 }
 
 impl Cache {
+    pub fn new_with_persistence(persistence: persistence::Persistence) -> io::Result<Self> {
+        persistence.load_cache()
+    }
+
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),

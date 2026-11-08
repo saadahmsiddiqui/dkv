@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
+use dkv::Cache;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
+use tokio::sync::{RwLock, oneshot};
 
 #[tokio::test]
 async fn server_integration_test() {
@@ -12,10 +15,18 @@ async fn server_integration_test() {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
+    let cache = Arc::new(RwLock::new(Cache::new()));
+    let persistence = Arc::new(dkv::persistence::Persistence::new("test.log"));
+
     let server = tokio::spawn(async move {
-        dkv::server::serve(listener, async move {
-            let _ = shutdown_rx.await;
-        })
+        dkv::server::serve(
+            listener,
+            cache,
+            async move {
+                let _ = shutdown_rx.await;
+            },
+            Some(persistence),
+        )
         .await
         .expect("server should run successfully");
     });
@@ -80,11 +91,18 @@ async fn server_handles_concurrent_clients_correctly() {
 
     let address = listener.local_addr().expect("get local address");
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let cache = Arc::new(RwLock::new(Cache::new()));
+    let persistence = Arc::new(dkv::persistence::Persistence::new("test.log"));
 
     let server = tokio::spawn(async move {
-        dkv::server::serve(listener, async move {
-            let _ = shutdown_rx.await;
-        })
+        dkv::server::serve(
+            listener,
+            cache,
+            async move {
+                let _ = shutdown_rx.await;
+            },
+            Some(persistence.clone()),
+        )
         .await
         .expect("server should run");
     });
@@ -139,18 +157,25 @@ async fn concurrent_clients_can_write_to_the_same_key() {
     use tokio::net::TcpStream;
     use tokio::sync::oneshot;
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     let address = listener.local_addr().unwrap();
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
+    let cache = Arc::new(RwLock::new(Cache::new()));
+
+    let persistence = Arc::new(dkv::persistence::Persistence::new("test.log"));
+
     let server = tokio::spawn(async move {
-        dkv::server::serve(listener, async {
-            let _ = shutdown_rx.await;
-        })
+        dkv::server::serve(
+            listener,
+            cache,
+            async {
+                let _ = shutdown_rx.await;
+            },
+            Some(persistence.clone()),
+        )
         .await
         .unwrap();
     });
