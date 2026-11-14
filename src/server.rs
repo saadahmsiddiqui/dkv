@@ -13,7 +13,7 @@ pub async fn run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let cache = persistence.load_cache()?;
     let cache = Arc::new(RwLock::new(cache));
 
-    println!("RustCache listening on {}", listener.local_addr()?);
+    println!("dkv listening on {}", listener.local_addr()?);
 
     serve(listener, cache, std::future::pending(), Some(persistence)).await
 }
@@ -44,7 +44,7 @@ where
     loop {
         tokio::select! {
             _ = &mut shutdown => {
-                println!("RustCache shutting down");
+                println!("dkv shutting down");
                 break;
             }
 

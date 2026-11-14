@@ -1,5 +1,7 @@
 pub mod persistence;
 pub mod server;
+pub mod cluster;
+
 use std::collections::HashMap;
 use std::io;
 use std::time::{Duration, Instant};
