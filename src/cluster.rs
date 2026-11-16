@@ -23,10 +23,6 @@ impl Cluster {
         Self { nodes: Vec::new() }
     }
 
-    pub fn default() -> Self {
-        Self { nodes: Vec::new() }
-    }
-
     pub fn add_node(&mut self, node: Node) {
         self.nodes.push(node);
     }
@@ -46,6 +42,25 @@ impl Cluster {
 
 impl Default for Cluster {
     fn default() -> Self {
-        Self::default()
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_nodes_to_cluster() {
+        let mut cluster = Cluster::new();
+
+        cluster.add_node(Node::new("node-a", "127.0.0.1:6379"));
+        cluster.add_node(Node::new("node-b", "127.0.0.1:6380"));
+        cluster.add_node(Node::new("node-c", "127.0.0.1:6381"));
+
+        assert_eq!(cluster.len(), 3);
+        assert!(!cluster.is_empty());
+        assert_eq!(cluster.nodes()[0].id, "node-a");
+        assert_eq!(cluster.nodes()[1].address, "127.0.0.1:6380");
     }
 }

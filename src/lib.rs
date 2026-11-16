@@ -1,6 +1,6 @@
+pub mod cluster;
 pub mod persistence;
 pub mod server;
-pub mod cluster;
 
 use std::collections::HashMap;
 use std::io;
